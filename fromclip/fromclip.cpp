@@ -5,6 +5,7 @@
 #include <locale.h>
 
 
+//@@ 引数で入力文字コードを指定できた方がいいかも。 MultiByteToWideChar() のコードページに 932 や 65001 を与える。
 
 int main(int argc, char* argv[])
 {
@@ -21,6 +22,7 @@ int main(int argc, char* argv[])
         CloseClipboard();
     }
     else if ( 0 != (hg = GetClipboardData( CF_TEXT )) ) {
+//@@@ 文字コード判定して、utf16 で出力するのがいい。
         fwrite( GlobalLock(hg), 1, GlobalSize(hg) - 1/*trim null terminater*/, stdout );
         GlobalUnlock(hg);
         CloseClipboard();
@@ -35,6 +37,7 @@ int main(int argc, char* argv[])
             }
         }
         else {
+//@@@ 文字コード判定して、utf16 で出力するのがいい。
             char * str = (char*)df + df->pFiles;
             while ( *str ) {
                 puts( str );

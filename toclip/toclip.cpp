@@ -4,8 +4,9 @@
 #include <stdio.h>
 #include <assert.h>
 
+//@@ オプションで、標準入力の文字コードや、引数入力時の区切り文字を指定できた方がいいかも。
 
-int main(int argc, char* argv[])
+int main(int argc, char* argv[])    //@@@ wmain( int argc, wchar_t *argv[ ], wchar_t *envp[ ] )
 {
     int clipboardFormat = CF_TEXT;
     HGLOBAL hg;
@@ -31,7 +32,7 @@ int main(int argc, char* argv[])
         if ( pos == 0 )
         {
             free(buf);
-            return 0;
+            return 0;   //@@@ これいいの？空白のクリップボードを作成すべきでは？
         }
 
         if ( FALSE == (hg = GlobalAlloc( GMEM_MOVEABLE, pos )) ) {
@@ -45,12 +46,18 @@ int main(int argc, char* argv[])
             memcpy( clipbuf, buf, pos );
             if ( IsTextUnicode(clipbuf, pos, 0) )
                 clipboardFormat = CF_UNICODETEXT;
+else
+{
+ //@@@ MultiByteToWideChar() で utf16 にする。
+ // utf8 も CP_UTF8 で utf16 にする。
+}
             GlobalUnlock( clipbuf );
         }
 
         free( buf );
     }
-    else {
+    else { //@@@ これ、区切り文字を改行にするのはいかがなものだろう。
+//@@@ wchar_t 対応。
         // counts args bytes
         static const char * const lineTerminater = "\r\n";
         static const size_t lineTerminaterSize = strlen(lineTerminater);
