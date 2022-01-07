@@ -4,12 +4,40 @@
 #include <stdio.h>
 #include <locale.h>
 
+// ん？ 標準出力には何で出すのが便利なんだ？
+// u16 で出力して、 mingw console で漢字が化ける。
+
+static void convertToUTF16(char *mbbuf, size_t mbsize, wchar_t **ubuf, size_t *usize, int codepage)
+{
+    if (codepage == 0)
+    {
+        static const int cpToTry[] = {
+            65001,  // utf8
+            932,    // sjis
+            CP_ACP, // The system default Windows ANSI code page.
+        };
+        *usize = 0;
+        for (int i = 0; i < sizeof(cpToTry) / sizeof(cpToTry[0]); ++i)
+        {
+            convertToUTF16(mbbuf, mbsize, ubuf, usize, cpToTry[i]);
+            if (*usize != 0)
+                return;
+        }
+    }
+    else
+    {
+        *usize = MultiByteToWideChar(codepage, MB_ERR_INVALID_CHARS, mbbuf, mbsize, 0, 0);
+        *ubuf = (wchar_t *)malloc(*usize);
+        MultiByteToWideChar(codepage, MB_ERR_INVALID_CHARS, mbbuf, mbsize, *ubuf, *usize);
+    }
+}
 
 //@@ 引数で入力文字コードを指定できた方がいいかも。 MultiByteToWideChar() のコードページに 932 や 65001 を与える。
 
-int main(int argc, char* argv[])
+int main()
 {
     HGLOBAL hg;
+    int codepage = 0; // 将来オプションで設定する。
 
     setlocale( LC_ALL, "jpn" );
     if ( !OpenClipboard( NULL ) ) {
@@ -21,9 +49,22 @@ int main(int argc, char* argv[])
         GlobalUnlock(hg);
         CloseClipboard();
     }
-    else if ( 0 != (hg = GetClipboardData( CF_TEXT )) ) {
-//@@@ 文字コード判定して、utf16 で出力するのがいい。
-        fwrite( GlobalLock(hg), 1, GlobalSize(hg) - 1/*trim null terminater*/, stdout );
+    else if (0 != (hg = GetClipboardData(CF_TEXT)))
+    {
+        void *buf = GlobalLock(hg);
+        size_t size = GlobalSize(hg);
+        wchar_t *ubuf;
+        size_t usize;
+        convertToUTF16((char *)buf, size, &ubuf, &usize, codepage);
+        if (usize == 0)
+        {
+            fwrite(buf, 1, GlobalSize(hg) - 1 /*trim null terminater*/, stdout);
+        }
+        else
+        {
+            wprintf(L"%s", ubuf);
+            free(ubuf);
+        }
         GlobalUnlock(hg);
         CloseClipboard();
     }
@@ -37,7 +78,7 @@ int main(int argc, char* argv[])
             }
         }
         else {
-//@@@ 文字コード判定して、utf16 で出力するのがいい。
+            /*@@convertToUTF16() した方がいい */
             char * str = (char*)df + df->pFiles;
             while ( *str ) {
                 puts( str );
