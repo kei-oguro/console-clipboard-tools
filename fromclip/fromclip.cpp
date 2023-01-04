@@ -39,13 +39,15 @@ int main()
     HGLOBAL hg;
     int codepage = 0; // 将来オプションで設定する。
 
-    setlocale( LC_ALL, "jpn" );
-    if ( !OpenClipboard( NULL ) ) {
-        printf( "fromclip.exe: can not open clipboard.\n" );
+    setlocale(LC_ALL, "jpn");
+    if (!OpenClipboard(NULL))
+    {
+        printf("fromclip.exe: can not open clipboard.\n");
         return 1;
     }
-    if ( 0 != (hg = GetClipboardData( CF_UNICODETEXT )) ) {
-        wprintf( L"%s", (wchar_t*)GlobalLock(hg) );
+    if (0 != (hg = GetClipboardData(CF_UNICODETEXT)))
+    {
+        wprintf(L"%s", (wchar_t *)GlobalLock(hg));
         GlobalUnlock(hg);
         CloseClipboard();
     }
@@ -68,32 +70,37 @@ int main()
         GlobalUnlock(hg);
         CloseClipboard();
     }
-    else if ( 0 != (hg = GetClipboardData( CF_HDROP )) ) {
-        DROPFILES * df = (DROPFILES*)GlobalLock( hg );
-        if ( df->fWide ) {
-            wchar_t * str = (wchar_t*)((char*)df + df->pFiles);
-            while ( *str ) {
-                _putws( str );
-                str = wcschr( str, 0 ) + 1/* skip terminater */;
+    else if (0 != (hg = GetClipboardData(CF_HDROP)))
+    {
+        DROPFILES *df = (DROPFILES *)GlobalLock(hg);
+        if (df->fWide)
+        {
+            wchar_t *str = (wchar_t *)((char *)df + df->pFiles);
+            while (*str)
+            {
+                _putws(str);
+                str = wcschr(str, 0) + 1 /* skip terminater */;
             }
         }
-        else {
+        else
+        {
             /*@@convertToUTF16() した方がいい */
-            char * str = (char*)df + df->pFiles;
-            while ( *str ) {
-                puts( str );
-                str = strchr( str, 0 ) + 1/* skip terminater */;
+            char *str = (char *)df + df->pFiles;
+            while (*str)
+            {
+                puts(str);
+                str = strchr(str, 0) + 1 /* skip terminater */;
             }
         }
         GlobalUnlock(hg);
         CloseClipboard();
     }
-    else {
-        printf( "fromclip: can not get clipboard data.\n" );
+    else
+    {
+        printf("fromclip: can not get clipboard data.\n");
         CloseClipboard();
         return 2;
     }
 
     return 0;
 }
- 
