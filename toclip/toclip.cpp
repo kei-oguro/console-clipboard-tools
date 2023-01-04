@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) //@@@ wmain( int argc, wchar_t *argv[ ], wchar_
     if (argc < 2)
     {
         int size = 1024 * 64;
-        char *buf = (char *)malloc(size);
+        char *buf = (char *)malloc(size + 1);
         char *dest = buf;
         int pos = 0;
         while (!feof(stdin))
@@ -27,16 +27,12 @@ int main(int argc, char *argv[]) //@@@ wmain( int argc, wchar_t *argv[ ], wchar_
                 break;
             }
             // まだ読みきってないので、バッファを拡張
-            buf = (char *)realloc(buf, size * 4);
+            buf = (char *)realloc(buf, size * 4 + 1);
             dest = buf + size;
             pos = size;
             size *= 4;
         }
-        if (pos == 0)
-        {
-            free(buf);
-            return 0; //@@@ これいいの？空白のクリップボードを作成すべきでは？
-        }
+        buf[pos++] = '\0';
 
         if (FALSE == (hg = GlobalAlloc(GMEM_MOVEABLE, pos)))
         {
