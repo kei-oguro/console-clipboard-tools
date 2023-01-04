@@ -1,0 +1,19 @@
+{
+    "cSpell.words": [
+        "toclip"
+    ],
+    "editor.formatOnSave": false,
+    "cSpell.dictionaries": [
+        "win32api"
+    ],
+    "cSpell.customDictionaries": {
+        "project-abbreviations": {
+          "name": "project-abbreviations",
+          "path": "${workspaceRoot}/cspell-project-abbreviations.txt",
+          "description": "Words used in this project",
+          "addWords": true
+        },
+        "custom": true, // Enable the `custom` dictionary
+        "internal-terms": false // Disable the `internal-terms` dictionary
+    }
+}
