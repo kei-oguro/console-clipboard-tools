@@ -1,49 +1,112 @@
 #include <windows.h>
 #pragma hdrstop
 
-#include <stdio.h>
-#include <assert.h>
+#include <vector>
+#include <string>
 
-//@@ オプションで、標準入力の文字コードや、引数入力時の区切り文字を指定できた方がいいかも。
+struct ClipboardRAII
+{
+    ClipboardRAII()
+    {
+        if (!OpenClipboard(NULL))
+        {
+            throw "toclip.exe: can not open clipboard.";
+        }
+        if (!EmptyClipboard())
+        {
+            throw "toclip.exe: can not destroy clipboard and get ownership.";
+        }
+    }
+    ~ClipboardRAII() { CloseClipboard(); }
 
-int main(int argc, char *argv[]) //@@@ wmain( int argc, wchar_t *argv[ ], wchar_t *envp[ ] )
+    ClipboardRAII(const ClipboardRAII &) = delete;
+    ClipboardRAII &operator=(const ClipboardRAII &) = delete;
+};
+
+struct GlobalMemoryRAII
+{
+    GlobalMemoryRAII(UINT uFlags, SIZE_T dwBytes) : hg(Allocate(uFlags, dwBytes)) {}
+    ~GlobalMemoryRAII() { GlobalFree(hg); }
+    void ReAlloc(UINT uFlags, SIZE_T dwBytes) const
+    {
+        auto newHandle = GlobalReAlloc(hg, dwBytes, uFlags);
+        if (newHandle == NULL)
+        {
+            throw "can not re-allocate global memory";
+        }
+        hg = newHandle;
+    }
+
+    mutable HGLOBAL hg;
+
+    static HGLOBAL Allocate(UINT uFlags, SIZE_T dwBytes)
+    {
+        auto hg = GlobalAlloc(uFlags, dwBytes);
+        if (hg == NULL)
+        {
+            throw "toclip.exe: can not allocate global memory.";
+        }
+        return hg;
+    }
+
+    GlobalMemoryRAII() = delete;
+    GlobalMemoryRAII(const GlobalMemoryRAII &) = delete;
+    GlobalMemoryRAII &operator=(const GlobalMemoryRAII &) = delete;
+};
+
+template <typename T>
+struct GlobalLockerRAII
+{
+    const HGLOBAL hg;
+    T *const address;
+    GlobalLockerRAII(const GlobalMemoryRAII &gm) : hg(gm.hg), address(Lock(hg)) {}
+    GlobalLockerRAII(const HGLOBAL hGlobal) : hg(hGlobal), address(Lock(hg)) {}
+    ~GlobalLockerRAII() { GlobalUnlock(hg); }
+    static T *Lock(const HGLOBAL hg)
+    {
+        const auto address = static_cast<T *>(GlobalLock(hg));
+        if (address == NULL)
+        {
+            throw "can not lock global memory.";
+        }
+        return address;
+    }
+
+    GlobalLockerRAII() = delete;
+    GlobalLockerRAII(const GlobalLockerRAII &) = delete;
+    GlobalLockerRAII &operator=(const GlobalLockerRAII &) = delete;
+};
+
+int main(int argc, char *argv[])
 {
     int clipboardFormat = CF_TEXT;
-    HGLOBAL hg;
+    const GlobalMemoryRAII memory(GMEM_MOVEABLE, 0);
 
     if (argc < 2)
     {
-        int size = 1024 * 64;
-        char *buf = (char *)malloc(size + 1);
-        char *dest = buf;
+        size_t size = 1024 * 64;
+        std::vector<char> buf(size + 1);
         int pos = 0;
         while (!feof(stdin))
         {
-            int cntRead;
+            buf.resize(size + 1 /*null terminator*/);
             int bufRest = size - pos;
-            if (bufRest != (cntRead = fread(dest, sizeof(char), bufRest, stdin)))
+            const auto cntRead = fread(buf.data() + pos, sizeof(char), bufRest, stdin);
+            pos += cntRead;
+            if (bufRest != cntRead)
             {
-                pos += cntRead;
                 break;
             }
-            // まだ読みきってないので、バッファを拡張
-            buf = (char *)realloc(buf, size * 4 + 1);
-            dest = buf + size;
-            pos = size;
-            size *= 4;
+            size *= 4; // まだ読みきってないので、バッファを拡張
         }
         buf[pos++] = '\0';
 
-        if (FALSE == (hg = GlobalAlloc(GMEM_MOVEABLE, pos)))
-        {
-            printf("toclip.exe: can not allocate global memory.\n");
-            free(buf);
-            return 1;
-        }
+        memory.ReAlloc(GMEM_MOVEABLE, pos);
 
         {
-            char *clipbuf = (char *)GlobalLock(hg);
-            memcpy(clipbuf, buf, pos);
+            GlobalLockerRAII<char> locker(memory);
+            char *const clipbuf = locker.address;
+            memcpy(clipbuf, buf.data(), pos);
             if (IsTextUnicode(clipbuf, pos, 0))
                 clipboardFormat = CF_UNICODETEXT;
             else
@@ -51,69 +114,27 @@ int main(int argc, char *argv[]) //@@@ wmain( int argc, wchar_t *argv[ ], wchar_
                 //@@@ MultiByteToWideChar() で utf16 にする。
                 // utf8 も CP_UTF8 で utf16 にする。
             }
-            GlobalUnlock(clipbuf);
         }
-
-        free(buf);
     }
     else
     { //@@@ これ、区切り文字を改行にするのはいかがなものだろう。
         //@@@ wchar_t 対応。
-        // counts args bytes
-        static const char *const lineTerminater = "\r\n";
-        static const size_t lineTerminaterSize = strlen(lineTerminater);
-        int size = 0;
+        std::string lines;
         for (int lpc = 1; argc > lpc; lpc++)
         {
-            size += strlen(argv[lpc]) + lineTerminaterSize;
+            lines.append(argv[lpc]).append("\n");
         }
-
-        // alloc buff
-        if (FALSE == (hg = GlobalAlloc(GMEM_MOVEABLE, size)))
-        {
-            printf("toclip.exe: can not allocate global memory.\n");
-            return 1;
-        }
-
-        // copy to clip buff
-        char *const clipbuf = (char *)GlobalLock(hg);
-        {
-            char *str = clipbuf;
-            for (int lpc = 1; argc > lpc; lpc++)
-            {
-                strcpy(str, argv[lpc]);
-                str += strlen(argv[lpc]);
-                memcpy(str, lineTerminater, lineTerminaterSize);
-                str += lineTerminaterSize;
-            }
-            assert(size == str - clipbuf);
-        }
-        GlobalUnlock(clipbuf);
+        memory.ReAlloc(GMEM_MOVEABLE, lines.size());
+        GlobalLockerRAII<char> locker(memory);
+        char *const clipbuf = locker.address;
+        memcpy(clipbuf, lines.c_str(), lines.size());
     }
 
-    if (!OpenClipboard(NULL))
+    ClipboardRAII clipboard;
+    if (!SetClipboardData(clipboardFormat, memory.hg))
     {
-        printf("toclip.exe: can not open clipboard.\n");
-        GlobalFree(hg);
-        return 2;
+        throw "toclip.exe: can not set data to clipboard.";
     }
-    if (!EmptyClipboard())
-    {
-        printf("toclip.exe: can not destroy clipboard and get ownership.\n");
-        GlobalFree(hg);
-        CloseClipboard();
-        return 3;
-    }
-
-    if (!SetClipboardData(clipboardFormat, hg))
-    {
-        printf("toclip.exe: can not set data to clipboard.\n");
-        GlobalFree(hg);
-        CloseClipboard();
-        return 4;
-    }
-    GlobalFree(hg);
-    CloseClipboard();
 
     return 0;
 }
