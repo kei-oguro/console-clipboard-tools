@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) //@@@ wmain( int argc, wchar_t *argv[ ], wchar_
     }
     if (!EmptyClipboard())
     {
-        printf("toclip.exe: can not destory clipboard and get ownership.\n");
+        printf("toclip.exe: can not destroy clipboard and get ownership.\n");
         GlobalFree(hg);
         CloseClipboard();
         return 3;
@@ -112,6 +112,7 @@ int main(int argc, char *argv[]) //@@@ wmain( int argc, wchar_t *argv[ ], wchar_
         CloseClipboard();
         return 4;
     }
+    GlobalFree(hg);
     CloseClipboard();
 
     return 0;
